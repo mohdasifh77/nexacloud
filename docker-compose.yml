@@ -1,0 +1,100 @@
+services:
+  # ─── Frontend ───────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: nexacloud-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+    depends_on:
+      - backend
+    networks:
+      - nexacloud-network
+    restart: unless-stopped
+
+  # ─── Backend ────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: nexacloud-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - MONGO_URI=mongodb://admin:nexacloud_secret_2024@mongo:27017/nexacloud?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=nexacloud_jwt_secret_key_2024
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - nexacloud-network
+    restart: unless-stopped
+
+  # ─── Python Analytics ───────────────────────────────────
+  python-service:
+    build:
+      context: ./python-service
+      dockerfile: ../docker/Dockerfile.python
+    container_name: nexacloud-analytics
+    ports:
+      - "8000:8000"
+    networks:
+      - nexacloud-network
+    restart: unless-stopped
+
+  # ─── MongoDB ────────────────────────────────────────────
+  mongo:
+    image: mongo:7.0
+    container_name: nexacloud-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=nexacloud_secret_2024
+      - MONGO_INITDB_DATABASE=nexacloud
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - nexacloud-network
+    restart: unless-stopped
+
+  # ─── Redis ──────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nexacloud-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - nexacloud-network
+    restart: unless-stopped
+
+  # ─── Nginx ──────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: nexacloud-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - nexacloud-network
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  redis-data:
+
+networks:
+  nexacloud-network:
+    driver: bridge
